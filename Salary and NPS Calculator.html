@@ -1,0 +1,168 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Salary and NPS Calculator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: single column tool, six inputs in a two-up grid, six result cards below that wrap to fit */
+  :root {
+    --bg: #ffffff;
+    --fg: #1d2433;
+    --muted: #5b6578;
+    --card: #e8f0fb;
+    --field: #f3f5f9;
+    --border: #cfd6e2;
+    --accent: #1f6feb;
+    --pos: #1a7f4b;
+    --neg: #b3261e;
+    --font: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161d; --fg: #e6eaf2; --muted: #9aa4b8; --card: #1c2a40;
+      --field: #1a2029; --border: #2d3646; --accent: #5b9bff;
+      --pos: #4cc38a; --neg: #ff7b72; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161d; --fg: #e6eaf2; --muted: #9aa4b8; --card: #1c2a40;
+    --field: #1a2029; --border: #2d3646; --accent: #5b9bff;
+    --pos: #4cc38a; --neg: #ff7b72; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.45;
+    padding-block: 20px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .sc { max-width: 680px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0 0 18px; font-weight: 650; text-wrap: balance; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 28px; margin-bottom: 20px; }
+  .grid > div { min-width: 0; }
+  label { display: block; font-size: 13px; margin-bottom: 7px; }
+  label span { font-variant-numeric: tabular-nums; }
+  input[type=number], select {
+    width: 100%; padding: 10px; font-size: 14px; font-family: inherit;
+    color: var(--fg); background: var(--field);
+    border: 1px solid var(--border); border-radius: 6px;
+  }
+  input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0; }
+  input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .card { background: var(--card); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .card small { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .card b { font-size: 19px; font-variant-numeric: tabular-nums; font-weight: 650; }
+  .pos { color: var(--pos); }
+  .neg { color: var(--neg); }
+
+  .note { font-size: 11.5px; color: var(--muted); margin-top: 16px; max-width: 65ch; }
+
+  @media (max-width: 520px) { .grid { grid-template-columns: 1fr; gap: 16px; } }
+</style>
+
+<div class="sc">
+  <h1>See how your salary changes</h1>
+
+  <div class="grid">
+    <div><label for="ctc">Annual CTC (₹)</label><input type="number" id="ctc" value="1400000" min="0" step="10000"></div>
+    <div><label for="bp">Basic + DA as % of CTC: <span id="bv">36</span>%</label><input type="range" id="bp" min="10" max="60" value="36"></div>
+
+    <div><label for="np">Employer NPS contribution (% of basic): <span id="nv">8</span>%</label><input type="range" id="np" min="0" max="14" value="8"></div>
+    <div>
+      <label for="rg">Tax regime</label>
+      <select id="rg">
+        <option value="New">New regime (default)</option>
+        <option value="Old">Old regime</option>
+      </select>
+    </div>
+
+    <div><label for="yr">Years to retirement: <span id="yv">20</span></label><input type="range" id="yr" min="1" max="40" value="20"></div>
+    <div><label for="rt">Assumed annual return: <span id="rv">9</span>%</label><input type="range" id="rt" min="4" max="14" value="9"></div>
+  </div>
+
+  <div class="cards" aria-live="polite">
+    <div class="card"><small>Monthly in-hand now</small><b id="o1"></b></div>
+    <div class="card"><small>Monthly in-hand after NPS</small><b id="o2"></b></div>
+    <div class="card"><small>Change in monthly in-hand</small><b id="o3"></b></div>
+    <div class="card"><small>Annual tax saved</small><b id="o4" class="pos"></b></div>
+    <div class="card"><small>Annual NPS contribution</small><b id="o5"></b></div>
+    <div class="card"><small>Indicative corpus at retirement</small><b id="o6" class="pos"></b></div>
+  </div>
+
+  <p class="note">Assumes the whole CTC is taxable salary with no other income or deductions (standard deduction only), 4% cess, and a constant contribution. Tax slabs used are FY 2025-26; verify against current rules. Projections are illustrative, not guaranteed.</p>
+</div>
+
+<script>
+(function () {
+  var $ = function (i) { return document.getElementById(i); };
+  var fmt = function (n) { return "₹" + Math.round(n).toLocaleString("en-IN"); };
+
+  function tax(t, reg) {
+    var x = 0;
+    if (reg === "New") {
+      if (t > 2400000) x = 300000 + (t - 2400000) * 0.30;
+      else if (t > 2000000) x = 200000 + (t - 2000000) * 0.25;
+      else if (t > 1600000) x = 120000 + (t - 1600000) * 0.20;
+      else if (t > 1200000) x = 60000 + (t - 1200000) * 0.15;
+      else if (t > 800000) x = 20000 + (t - 800000) * 0.10;
+      else if (t > 400000) x = (t - 400000) * 0.05;
+      if (t <= 1200000) x = 0; else if (x > t - 1200000) x = t - 1200000;
+    } else {
+      if (t > 1000000) x = 112500 + (t - 1000000) * 0.30;
+      else if (t > 500000) x = 12500 + (t - 500000) * 0.20;
+      else if (t > 250000) x = (t - 250000) * 0.05;
+      if (t <= 500000) x = 0;
+    }
+    return x * 1.04;
+  }
+
+  function calc() {
+    var ctc = +$("ctc").value || 0,
+        bp = +$("bp").value, np = +$("np").value,
+        reg = $("rg").value, yrs = +$("yr").value, rt = +$("rt").value;
+
+    $("bv").textContent = bp; $("nv").textContent = np;
+    $("yv").textContent = yrs; $("rv").textContent = rt;
+
+    var basic = ctc * bp / 100;
+    var nps = basic * np / 100;
+    var cap = basic * (reg === "New" ? 0.14 : 0.10);
+    var ded = Math.min(nps, cap);
+    var sd = reg === "New" ? 75000 : 50000;
+
+    var t1 = Math.max(ctc - sd, 0);
+    var t2 = Math.max(ctc - sd - ded, 0);
+    var tx1 = tax(t1, reg), tx2 = tax(t2, reg);
+
+    var now = (ctc - tx1) / 12;
+    var after = (ctc - nps - tx2) / 12;
+    var chg = after - now;
+
+    var i = rt / 100 / 12, n = yrs * 12, m = nps / 12;
+    var corpus = i > 0 ? m * ((Math.pow(1 + i, n) - 1) / i) * (1 + i) : m * n;
+
+    $("o1").textContent = fmt(now);
+    $("o2").textContent = fmt(after);
+    var c = $("o3");
+    c.textContent = (chg < 0 ? "−" : "+") + fmt(Math.abs(chg));
+    c.className = chg < 0 ? "neg" : "pos";
+    $("o4").textContent = fmt(tx1 - tx2);
+    $("o5").textContent = fmt(nps);
+    $("o6").textContent = fmt(corpus);
+  }
+
+  ["ctc", "bp", "np", "rg", "yr", "rt"].forEach(function (id) {
+    $(id).addEventListener("input", calc);
+    $(id).addEventListener("change", calc);
+  });
+  calc();
+})();
+</script>
+
+</body></html>
